@@ -5,7 +5,7 @@ that start with `.` or `~` or end with `~`.
 To install from source:
 
 ```
-go get github.com/loov/utils/watchrun
+go get github.com/loov/watchrun
 ```
 
 Example usage:
