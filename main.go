@@ -125,8 +125,6 @@ func main() {
 	}
 	procs := ParseArgs(args)
 
-	fmt.Printf("%#v\n", procs)
-
 	pipe := Run(procs)
 	for range monitor(*dir, *interval) {
 		if pipe != nil {
