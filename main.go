@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,18 +21,97 @@ var (
 	ignoreext    = flag.String("e", ".exe", "ignore files that end with these suffixes")
 )
 
-func run(args []string) *exec.Cmd {
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stdout
-	err := cmd.Run()
-	if err != nil {
-		fmt.Println(err)
+type Process struct {
+	Cmd  string
+	Args []string
+}
+
+func (proc *Process) String() string {
+	return proc.Cmd + " " + strings.Join(proc.Args, " ")
+}
+
+type Pipeline struct {
+	Processes []Process
+
+	mu     sync.Mutex
+	proc   Process
+	active *exec.Cmd
+	killed bool
+}
+
+func (pipe *Pipeline) Run() {
+	for _, proc := range pipe.Processes {
+		pipe.mu.Lock()
+		if pipe.killed {
+			pipe.mu.Unlock()
+			return
+		}
+
+		pipe.proc = proc
+		pipe.active = exec.Command(proc.Cmd, proc.Args...)
+		pipe.active.Stdout, pipe.active.Stderr = os.Stdout, os.Stdout
+
+		fmt.Println("<<  run:", proc.String(), ">>")
+
+		start := time.Now()
+		err := pipe.active.Start()
+		if err != nil {
+			pipe.active = nil
+			pipe.killed = true
+			pipe.mu.Unlock()
+			fmt.Println("<< fail:", err, ">>")
+			return
+		}
+		cmd := pipe.active
+		pipe.mu.Unlock()
+
+		if err := cmd.Wait(); err != nil {
+			return
+		}
+		fmt.Println("<< done:", proc.String(), time.Since(start), ">>")
 	}
-	return cmd
+}
+
+func (pipe *Pipeline) Kill() {
+	pipe.mu.Lock()
+	defer pipe.mu.Unlock()
+
+	if pipe.active != nil {
+		fmt.Println("<< kill:", pipe.proc.String(), ">>")
+		pipe.active.Process.Kill()
+		pipe.active = nil
+	}
+	pipe.killed = true
+}
+
+func Run(procs []Process) *Pipeline {
+	pipe := &Pipeline{Processes: procs}
+	go pipe.Run()
+	return pipe
 }
 
 var ignoreexts []string
+
+func ParseArgs(args []string) (procs []Process) {
+	start := 0
+	for i, arg := range args {
+		if arg == ";;" {
+			procs = append(procs, Process{
+				Cmd:  args[start],
+				Args: args[start+1 : i],
+			})
+			start = i + 1
+		}
+	}
+	if start < len(args) {
+		procs = append(procs, Process{
+			Cmd:  args[start],
+			Args: args[start+1:],
+		})
+	}
+
+	return procs
+}
 
 func main() {
 	flag.Parse()
@@ -43,14 +123,17 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
+	procs := ParseArgs(args)
 
-	cmd := run(args)
+	fmt.Printf("%#v\n", procs)
+
+	pipe := Run(procs)
 	for range monitor(*dir, *interval) {
-		if cmd != nil && cmd.Process != nil {
-			cmd.Process.Kill()
+		if pipe != nil {
+			pipe.Kill()
 		}
 		fmt.Println("<<", time.Now(), ">>")
-		cmd = run(args)
+		pipe = Run(procs)
 	}
 }
 
