@@ -122,14 +122,14 @@ func main() {
 	}
 	procs := ParseArgs(args)
 
-	pipe := Run(procs)
-
 	changes := watch.Changes(
 		*dir, *interval,
 		watch.IgnoreExtensions(strings.Split(*ignoreext, ";")...),
 		watch.IgnoreNameSuffixed(strings.Split(*ignoresuffix, "")...),
 		watch.IgnoreNamePrefixed(strings.Split(*ignoreprefix, "")...),
 	)
+
+	var pipe *Pipeline
 	for range changes {
 		if pipe != nil {
 			pipe.Kill()
