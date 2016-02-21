@@ -26,3 +26,9 @@ You can explicitly specify which folder to watch with `-d`:
 ```
 $ watchrun -d ../../ go run main.go
 ```
+
+You can run multiple commands in succession with `;;` (instead of the usual `&&`). For example:
+
+```
+$ watchrun go build -i . ;; myproject
+```
