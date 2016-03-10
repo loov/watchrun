@@ -3,6 +3,7 @@ package watch
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -69,4 +70,11 @@ func IgnoreNamePrefixed(prefixes ...string) Filter {
 		}
 		return false
 	}
+}
+
+func cname(name string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(name)
+	}
+	return name
 }

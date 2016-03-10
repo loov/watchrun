@@ -3,8 +3,6 @@ package watch
 import (
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 )
 
@@ -14,14 +12,14 @@ type Monitor struct {
 	Interval    time.Duration
 	Directories []string
 	Ignore      Filter
-	Changes     chan struct{}
+	Changes     chan []Change
 }
 
-func Changes(path string, interval time.Duration, ignore ...Filter) chan struct{} {
+func Changes(path string, interval time.Duration, ignore ...Filter) chan []Change {
 	monitor := &Monitor{}
 	monitor.Interval = interval
 	monitor.Directories = []string{path}
-	monitor.Changes = make(chan struct{})
+	monitor.Changes = make(chan []Change)
 	monitor.Ignore = IgnoreAll(ignore...)
 	monitor.Start()
 
@@ -40,8 +38,10 @@ func (m *Monitor) Run() {
 		next := m.getState()
 		if !previous.Same(next) {
 			time.Sleep(m.Interval)
-			previous = m.getState()
-			m.Changes <- struct{}{}
+			next = m.getState()
+			changes := previous.Changes(next)
+			previous = next
+			m.Changes <- changes
 			continue
 		}
 		time.Sleep(m.Interval)
@@ -62,6 +62,34 @@ func (into filetimes) Merge(other filetimes) {
 	for name, time := range other {
 		into[name] = time
 	}
+}
+
+type Change struct {
+	Kind string
+	Path string
+}
+
+func (current filetimes) Changes(next filetimes) (changes []Change) {
+	// modified and deleted files
+	for file, time := range current {
+		ntime, nok := next[file]
+		if !nok {
+			changes = append(changes, Change{"delete", file})
+			continue
+		}
+		if !ntime.Equal(time) {
+			changes = append(changes, Change{"modify", file})
+			continue
+		}
+	}
+	// added files
+	for file, _ := range next {
+		if _, ok := current[file]; !ok {
+			changes = append(changes, Change{"add", file})
+			continue
+		}
+	}
+	return
 }
 
 func (a filetimes) Same(b filetimes) bool {
@@ -104,16 +132,9 @@ func getFileTimes(dir string, ignore Filter) filetimes {
 		}
 
 		if !info.IsDir() {
-			times[cname(abs)] = info.ModTime()
+			times[abs] = info.ModTime()
 		}
 		return nil
 	})
 	return times
-}
-
-func cname(name string) string {
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(name)
-	}
-	return name
 }
