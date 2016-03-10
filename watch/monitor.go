@@ -38,7 +38,10 @@ func New(path string, interval time.Duration, ignore ...Filter) *Watch {
 }
 
 func (watch *Watch) Stop() {
-	atomic.StoreInt32(&watch.stage, stopping)
+	watch.once.Do(func() {
+		atomic.StoreInt32(&watch.stage, stopping)
+		close(watch.Changes)
+	})
 }
 
 func Changes(path string, interval time.Duration, ignore ...Filter) chan []Change {
@@ -54,6 +57,8 @@ func (watch *Watch) Wait() bool {
 func (watch *Watch) Start() { go watch.Run() }
 
 func (watch *Watch) Run() {
+	defer func() { recover() }()
+
 	defer atomic.StoreInt32(&watch.stage, stopped)
 
 	previous := make(filetimes)
