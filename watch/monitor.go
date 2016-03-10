@@ -3,55 +3,82 @@ package watch
 import (
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Filter func(path string, info os.FileInfo) bool
 
-type Monitor struct {
-	Interval    time.Duration
-	Directories []string
-	Ignore      Filter
-	Changes     chan []Change
+const (
+	running  = 0
+	stopping = 1
+	stopped  = 2
+)
+
+type Watch struct {
+	Changes chan []Change
+
+	once  sync.Once
+	stage int32
+
+	interval    time.Duration
+	directories []string
+	ignore      Filter
+}
+
+func New(path string, interval time.Duration, ignore ...Filter) *Watch {
+	watch := &Watch{}
+	watch.Changes = make(chan []Change)
+	watch.interval = interval
+	watch.directories = []string{path}
+	watch.ignore = IgnoreAll(ignore...)
+	watch.Start()
+	return watch
+}
+
+func (watch *Watch) Stop() {
+	atomic.StoreInt32(&watch.stage, stopping)
 }
 
 func Changes(path string, interval time.Duration, ignore ...Filter) chan []Change {
-	monitor := &Monitor{}
-	monitor.Interval = interval
-	monitor.Directories = []string{path}
-	monitor.Changes = make(chan []Change)
-	monitor.Ignore = IgnoreAll(ignore...)
-	monitor.Start()
-
-	return monitor.Changes
+	watch := New(path, interval, ignore...)
+	return watch.Changes
 }
 
-func (m *Monitor) Wait() bool {
-	<-m.Changes
+func (watch *Watch) Wait() bool {
+	<-watch.Changes
 	return true
 }
 
-func (m *Monitor) Start() { go m.Run() }
-func (m *Monitor) Run() {
+func (watch *Watch) Start() { go watch.Run() }
+
+func (watch *Watch) Run() {
+	defer atomic.StoreInt32(&watch.stage, stopped)
+
 	previous := make(filetimes)
 	for {
-		next := m.getState()
+		if atomic.LoadInt32(&watch.stage) >= stopping {
+			break
+		}
+
+		next := watch.getState()
 		if !previous.Same(next) {
-			time.Sleep(m.Interval)
-			next = m.getState()
+			time.Sleep(watch.interval)
+			next = watch.getState()
 			changes := previous.Changes(next)
 			previous = next
-			m.Changes <- changes
+			watch.Changes <- changes
 			continue
 		}
-		time.Sleep(m.Interval)
+		time.Sleep(watch.interval)
 	}
 }
 
-func (m *Monitor) getState() filetimes {
+func (watch *Watch) getState() filetimes {
 	times := make(filetimes)
-	for _, dir := range m.Directories {
-		times.Merge(getFileTimes(dir, m.Ignore))
+	for _, dir := range watch.directories {
+		times.Merge(getFileTimes(dir, watch.ignore))
 	}
 	return times
 }
@@ -65,8 +92,9 @@ func (into filetimes) Merge(other filetimes) {
 }
 
 type Change struct {
-	Kind string
-	Path string
+	Kind     string
+	Path     string
+	Modified time.Time
 }
 
 func (current filetimes) Changes(next filetimes) (changes []Change) {
@@ -74,18 +102,18 @@ func (current filetimes) Changes(next filetimes) (changes []Change) {
 	for file, time := range current {
 		ntime, nok := next[file]
 		if !nok {
-			changes = append(changes, Change{"delete", file})
+			changes = append(changes, Change{"delete", file, time})
 			continue
 		}
 		if !ntime.Equal(time) {
-			changes = append(changes, Change{"modify", file})
+			changes = append(changes, Change{"modify", file, ntime})
 			continue
 		}
 	}
 	// added files
-	for file, _ := range next {
+	for file, ntime := range next {
 		if _, ok := current[file]; !ok {
-			changes = append(changes, Change{"add", file})
+			changes = append(changes, Change{"create", file, ntime})
 			continue
 		}
 	}
@@ -117,10 +145,13 @@ func getFileTimes(dir string, ignore Filter) filetimes {
 			return nil
 		}
 
-		full := filepath.Join(dir, path)
-		abs, err := filepath.Abs(full)
-		if err != nil {
-			abs = full
+		abs := path
+		if !filepath.IsAbs(abs) {
+			full := filepath.Join(dir, path)
+			abs, err = filepath.Abs(full)
+			if err != nil {
+				abs = full
+			}
 		}
 
 		if ignore(abs, info) {
