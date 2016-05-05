@@ -21,10 +21,11 @@ $ echo package main; main(){ println("hello") } > main.go
 $ echo package main; main(){ println("world") } > main.go
 ```
 
-You can explicitly specify which folder to watch with `-monitor`:
+You can explicitly specify which folder or file to watch with `-monitor`:
 
 ```
 $ watchrun -monitor ../../ go run main.go
+$ watchrun -monitor main.go go run main.go
 ```
 
 You can run multiple commands in succession with `;;` (instead of the usual `&&`). For example:
