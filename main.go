@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/loov/watchrun/pgroup"
 	"github.com/loov/watchrun/watch"
 )
 
@@ -48,6 +49,7 @@ func (pipe *Pipeline) Run() {
 
 		pipe.proc = proc
 		pipe.active = exec.Command(proc.Cmd, proc.Args...)
+		pgroup.Setup(pipe.active)
 		pipe.active.Stdout, pipe.active.Stderr = os.Stdout, os.Stdout
 
 		fmt.Println("<<  run:", proc.String(), ">>")
@@ -77,7 +79,7 @@ func (pipe *Pipeline) Kill() {
 
 	if pipe.active != nil {
 		fmt.Println("<< kill:", pipe.proc.String(), ">>")
-		pipe.active.Process.Kill()
+		pgroup.Kill(pipe.active)
 		pipe.active = nil
 	}
 	pipe.killed = true
