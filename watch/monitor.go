@@ -1,8 +1,11 @@
 package watch
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,17 +25,23 @@ type Watch struct {
 	once  sync.Once
 	stage int32
 
-	interval    time.Duration
-	directories []string
-	ignore      Filter
+	interval time.Duration
+
+	monitor []string
+	ignore  []string
+	recurse bool
 }
 
-func New(path string, interval time.Duration, ignore ...Filter) *Watch {
+func New(interval time.Duration, monitor, ignore []string, recurse bool) *Watch {
 	watch := &Watch{}
 	watch.Changes = make(chan []Change)
 	watch.interval = interval
-	watch.directories = []string{path}
-	watch.ignore = IgnoreAll(ignore...)
+	watch.monitor = monitor
+	if len(watch.monitor) == 0 {
+		watch.monitor = []string{"."}
+	}
+	watch.ignore = ignore
+	watch.recurse = recurse
 	watch.Start()
 	return watch
 }
@@ -44,8 +53,8 @@ func (watch *Watch) Stop() {
 	})
 }
 
-func Changes(path string, interval time.Duration, ignore ...Filter) chan []Change {
-	watch := New(path, interval, ignore...)
+func Changes(interval time.Duration, monitor, ignore []string, recurse bool) chan []Change {
+	watch := New(interval, monitor, ignore, recurse)
 	return watch.Changes
 }
 
@@ -82,18 +91,77 @@ func (watch *Watch) Run() {
 
 func (watch *Watch) getState() filetimes {
 	times := make(filetimes)
-	for _, dir := range watch.directories {
-		times.Merge(getFileTimes(dir, watch.ignore))
+	for _, glob := range watch.monitor {
+		times.IncludeGlob(glob, watch.ignore, watch.recurse)
 	}
 	return times
 }
 
 type filetimes map[string]time.Time
 
-func (into filetimes) Merge(other filetimes) {
-	for name, time := range other {
-		into[name] = time
+func isnav(name string) bool {
+	return name == "." || name == ".."
+}
+
+func matchany(patterns []string, name string) bool {
+	name = cname(name)
+	for _, pattern := range patterns {
+		if match, _ := filepath.Match(pattern, name); match {
+			return true
+		}
 	}
+	return false
+}
+
+func (times filetimes) IncludeGlob(glob string, ignore []string, recurse bool) error {
+	if glob == "" {
+		return times.IncludeDir(".", ignore, recurse)
+	}
+
+	matches, err := filepath.Glob(glob)
+	if err != nil {
+		return err
+	}
+
+	for _, abs := range matches {
+		f, err := os.Lstat(abs)
+		if err != nil {
+			continue
+		}
+
+		if recurse && f.IsDir() {
+			times.IncludeDir(abs, ignore, recurse)
+		}
+		if f.Mode().IsRegular() {
+			times[cname(abs)] = f.ModTime()
+		}
+	}
+
+	return nil
+}
+
+func (times filetimes) IncludeDir(dir string, ignore []string, recurse bool) error {
+	matches, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range matches {
+		base := f.Name()
+		abs := filepath.Join(dir, base)
+		if isnav(base) || base == "" || matchany(ignore, base) {
+			continue
+		}
+
+		if recurse && f.IsDir() {
+			times.IncludeDir(abs, ignore, recurse)
+		}
+		if f.Mode().IsRegular() {
+			times[cname(abs)] = f.ModTime()
+		}
+	}
+
+	return nil
 }
 
 type Change struct {
@@ -137,40 +205,9 @@ func (a filetimes) Same(b filetimes) bool {
 	return true
 }
 
-func getFileTimes(dir string, ignore Filter) filetimes {
-	times := make(filetimes)
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Ignore . and ..
-		name := filepath.Base(path)
-		if name == "." || name == ".." || name == "" {
-			return nil
-		}
-
-		abs := path
-		if !filepath.IsAbs(abs) {
-			full := filepath.Join(dir, path)
-			abs, err = filepath.Abs(full)
-			if err != nil {
-				abs = full
-			}
-		}
-
-		if ignore(abs, info) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			} else {
-				return nil
-			}
-		}
-
-		if !info.IsDir() {
-			times[abs] = info.ModTime()
-		}
-		return nil
-	})
-	return times
+func cname(name string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(name)
+	}
+	return name
 }

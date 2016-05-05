@@ -13,13 +13,11 @@ import (
 )
 
 var (
-	dir      = flag.String("d", ".", "directory to watch")
-	interval = flag.Duration("i", 300*time.Millisecond, "interval to wait between monitoring")
-	verbose  = flag.Bool("v", false, "debug output")
-
-	ignoreprefix = flag.String("p", "~.", "ignore files that start with any of the characters")
-	ignoresuffix = flag.String("s", "~", "ignore files that end with any of the characters")
-	ignoreext    = flag.String("e", ".exe", "ignore files that end with these suffixes")
+	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
+	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
+	recurse  = flag.Bool("recurse", true, "when watching a folder should recurse")
+	ignore   = flag.String("ignore", "~*;.*;*~;*.exe", "ignore files/folders that match these globs")
+	verbose  = flag.Bool("verbose", false, "verbose output")
 )
 
 type Process struct {
@@ -122,11 +120,29 @@ func main() {
 	}
 	procs := ParseArgs(args)
 
+	monitoring := strings.Split(strings.Replace(*monitor, ":", ";", -1), ";")
+	ignoring := strings.Split(strings.Replace(*ignore, ":", ";", -1), ";")
+
+	if *verbose {
+		fmt.Println("Options:")
+		fmt.Println("    interval   : ", *interval)
+		fmt.Println("    recursive  : ", *recurse)
+		fmt.Println("    monitoring : ", monitoring)
+		fmt.Println("    ignoring   : ", ignoring)
+		fmt.Println()
+
+		fmt.Println("Processes:")
+		for _, proc := range procs {
+			fmt.Printf("    %s %s\n", proc.Cmd, strings.Join(proc.Args, " "))
+		}
+		fmt.Println()
+	}
+
 	changes := watch.Changes(
-		*dir, *interval,
-		watch.IgnoreExtensions(strings.Split(*ignoreext, ";")...),
-		watch.IgnoreNameSuffixed(strings.Split(*ignoresuffix, "")...),
-		watch.IgnoreNamePrefixed(strings.Split(*ignoreprefix, "")...),
+		*interval,
+		monitoring,
+		ignoring,
+		*recurse,
 	)
 
 	var pipe *Pipeline
