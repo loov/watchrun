@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -35,11 +36,21 @@ type Pipeline struct {
 
 	mu     sync.Mutex
 	proc   Process
+	reader io.ReadCloser
+	writer io.WriteCloser
 	active *exec.Cmd
 	killed bool
 }
 
+func (pipe *Pipeline) closeio() {
+	pipe.reader.Close()
+	pipe.writer.Close()
+}
+
 func (pipe *Pipeline) Run() {
+	pipe.reader, pipe.writer = io.Pipe()
+	go io.Copy(os.Stdout, pipe.reader)
+
 	for _, proc := range pipe.Processes {
 		pipe.mu.Lock()
 		if pipe.killed {
@@ -50,7 +61,7 @@ func (pipe *Pipeline) Run() {
 		pipe.proc = proc
 		pipe.active = exec.Command(proc.Cmd, proc.Args...)
 		pgroup.Setup(pipe.active)
-		pipe.active.Stdout, pipe.active.Stderr = os.Stdout, os.Stdout
+		pipe.active.Stdout, pipe.active.Stderr = pipe.writer, pipe.writer
 
 		fmt.Println("<<  run:", proc.String(), ">>")
 
@@ -59,6 +70,7 @@ func (pipe *Pipeline) Run() {
 		if err != nil {
 			pipe.active = nil
 			pipe.killed = true
+			pipe.closeio()
 			pipe.mu.Unlock()
 			fmt.Println("<< fail:", err, ">>")
 			return
@@ -79,6 +91,7 @@ func (pipe *Pipeline) Kill() {
 
 	if pipe.active != nil {
 		fmt.Println("<< kill:", pipe.proc.String(), ">>")
+		pipe.closeio()
 		pgroup.Kill(pipe.active)
 		pipe.active = nil
 	}
