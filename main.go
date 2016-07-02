@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/loov/watchrun/pgroup"
@@ -153,19 +155,30 @@ func main() {
 		fmt.Println()
 	}
 
-	changes := watch.Changes(
+	watcher := watch.New(
 		*interval,
 		monitoring,
 		ignoring,
 		*recurse,
 	)
 
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		watcher.Stop()
+	}()
+
 	var pipe *Pipeline
-	for range changes {
+	for range watcher.Changes {
 		if pipe != nil {
 			pipe.Kill()
 		}
 		fmt.Println("<<", time.Now(), ">>")
 		pipe = Run(procs)
+	}
+
+	if pipe != nil {
+		pipe.Kill()
 	}
 }

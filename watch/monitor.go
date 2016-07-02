@@ -49,7 +49,6 @@ func New(interval time.Duration, monitor, ignore []string, recurse bool) *Watch 
 func (watch *Watch) Stop() {
 	watch.once.Do(func() {
 		atomic.StoreInt32(&watch.stage, stopping)
-		close(watch.Changes)
 	})
 }
 
@@ -66,9 +65,8 @@ func (watch *Watch) Wait() bool {
 func (watch *Watch) Start() { go watch.Run() }
 
 func (watch *Watch) Run() {
-	defer func() { recover() }()
-
 	defer atomic.StoreInt32(&watch.stage, stopped)
+	defer close(watch.Changes)
 
 	previous := make(filetimes)
 	for {
