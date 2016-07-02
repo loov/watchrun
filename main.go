@@ -16,11 +16,24 @@ import (
 	"github.com/loov/watchrun/watch"
 )
 
+var DefaultIgnore = []string{
+	// hidden and temporary files
+	".*", "~*", "*~",
+	// object files
+	"*.[ao]", "*.so", "*.obj",
+	// log files
+	"*.log",
+	// temporary Go files
+	"*.test", "*.prof",
+	// windows binary files
+	"*.exe", "*.dll",
+}
+
 var (
 	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
 	recurse  = flag.Bool("recurse", true, "when watching a folder should recurse")
-	ignore   = flag.String("ignore", "~*;.*;*~;*.exe", "ignore files/folders that match these globs")
+	ignore   = flag.String("ignore", strings.Join(DefaultIgnore, ";"), "ignore files/folders that match these globs")
 	verbose  = flag.Bool("verbose", false, "verbose output")
 )
 
