@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-type Filter func(path string, info os.FileInfo) bool
-
 const (
 	running  = 0
 	stopping = 1
