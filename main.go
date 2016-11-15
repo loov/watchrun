@@ -29,13 +29,42 @@ var DefaultIgnore = []string{
 	"*.exe", "*.dll",
 }
 
+type Globs struct {
+	NoDefault  bool
+	Default    []string
+	Additional []string
+}
+
+func (globs *Globs) All() []string {
+	if globs.NoDefault {
+		return globs.Additional
+	}
+
+	return append(append([]string{}, globs.Default...), globs.Additional...)
+}
+
+func (globs *Globs) String() string {
+	return strings.Join(globs.All(), ";")
+}
+
+func (globs *Globs) Set(value string) error {
+	values := strings.Split(strings.Replace(value, ":", ";", -1), ";")
+	globs.Additional = append(globs.Additional, values...)
+	return nil
+}
+
 var (
+	ignore Globs = Globs{false, DefaultIgnore, nil}
+
 	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
 	recurse  = flag.Bool("recurse", true, "when watching a folder should recurse")
-	ignore   = flag.String("ignore", strings.Join(DefaultIgnore, ";"), "ignore files/folders that match these globs")
 	verbose  = flag.Bool("verbose", false, "verbose output")
 )
+
+func init() {
+	flag.Var(&ignore, "ignore", "ignore files/folders that match these globs")
+}
 
 type Process struct {
 	Cmd  string
@@ -151,7 +180,7 @@ func main() {
 	procs := ParseArgs(args)
 
 	monitoring := strings.Split(strings.Replace(*monitor, ":", ";", -1), ";")
-	ignoring := strings.Split(strings.Replace(*ignore, ":", ";", -1), ";")
+	ignoring := ignore.All()
 
 	if *verbose {
 		fmt.Println("Options:")
