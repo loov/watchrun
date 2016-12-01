@@ -55,6 +55,7 @@ func (globs *Globs) Set(value string) error {
 
 var (
 	ignore Globs = Globs{false, DefaultIgnore, nil}
+	care   Globs = Globs{false, nil, nil}
 
 	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
@@ -64,6 +65,7 @@ var (
 
 func init() {
 	flag.Var(&ignore, "ignore", "ignore files/folders that match these globs")
+	flag.Var(&care, "care", "check only changes to files that match these globs")
 }
 
 type Process struct {
@@ -181,6 +183,7 @@ func main() {
 
 	monitoring := strings.Split(strings.Replace(*monitor, ":", ";", -1), ";")
 	ignoring := ignore.All()
+	caring := care.All()
 
 	if *verbose {
 		fmt.Println("Options:")
@@ -188,6 +191,7 @@ func main() {
 		fmt.Println("    recursive  : ", *recurse)
 		fmt.Println("    monitoring : ", monitoring)
 		fmt.Println("    ignoring   : ", ignoring)
+		fmt.Println("    caring     : ", caring)
 		fmt.Println()
 
 		fmt.Println("Processes:")
@@ -201,6 +205,7 @@ func main() {
 		*interval,
 		monitoring,
 		ignoring,
+		caring,
 		*recurse,
 	)
 

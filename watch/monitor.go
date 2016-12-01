@@ -27,10 +27,11 @@ type Watch struct {
 
 	monitor []string
 	ignore  []string
+	care    []string
 	recurse bool
 }
 
-func New(interval time.Duration, monitor, ignore []string, recurse bool) *Watch {
+func New(interval time.Duration, monitor, ignore, care []string, recurse bool) *Watch {
 	watch := &Watch{}
 	watch.Changes = make(chan []Change)
 	watch.interval = interval
@@ -40,6 +41,7 @@ func New(interval time.Duration, monitor, ignore []string, recurse bool) *Watch 
 	}
 	watch.ignore = ignore
 	watch.recurse = recurse
+	watch.care = care
 	watch.Start()
 	return watch
 }
@@ -50,8 +52,8 @@ func (watch *Watch) Stop() {
 	})
 }
 
-func Changes(interval time.Duration, monitor, ignore []string, recurse bool) chan []Change {
-	watch := New(interval, monitor, ignore, recurse)
+func Changes(interval time.Duration, monitor, ignore, care []string, recurse bool) chan []Change {
+	watch := New(interval, monitor, ignore, care, recurse)
 	return watch.Changes
 }
 
@@ -88,7 +90,7 @@ func (watch *Watch) Run() {
 func (watch *Watch) getState() filetimes {
 	times := make(filetimes)
 	for _, glob := range watch.monitor {
-		times.IncludeGlob(glob, watch.ignore, watch.recurse)
+		times.IncludeGlob(glob, watch.ignore, watch.care, watch.recurse)
 	}
 	return times
 }
@@ -109,9 +111,9 @@ func matchany(patterns []string, name string) bool {
 	return false
 }
 
-func (times filetimes) IncludeGlob(glob string, ignore []string, recurse bool) error {
+func (times filetimes) IncludeGlob(glob string, ignore, care []string, recurse bool) error {
 	if glob == "" {
-		return times.IncludeDir(".", ignore, recurse)
+		return times.IncludeDir(".", ignore, care, recurse)
 	}
 
 	matches, err := filepath.Glob(glob)
@@ -126,7 +128,7 @@ func (times filetimes) IncludeGlob(glob string, ignore []string, recurse bool) e
 		}
 
 		if recurse && f.IsDir() {
-			times.IncludeDir(abs, ignore, recurse)
+			times.IncludeDir(abs, ignore, care, recurse)
 		}
 		if f.Mode().IsRegular() {
 			times[cname(abs)] = f.ModTime()
@@ -136,7 +138,7 @@ func (times filetimes) IncludeGlob(glob string, ignore []string, recurse bool) e
 	return nil
 }
 
-func (times filetimes) IncludeDir(dir string, ignore []string, recurse bool) error {
+func (times filetimes) IncludeDir(dir string, ignore, care []string, recurse bool) error {
 	matches, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return err
@@ -148,9 +150,12 @@ func (times filetimes) IncludeDir(dir string, ignore []string, recurse bool) err
 		if isnav(base) || base == "" || matchany(ignore, base) {
 			continue
 		}
+		if !f.IsDir() && len(care) > 0 && !matchany(care, base) {
+			continue
+		}
 
 		if recurse && f.IsDir() {
-			times.IncludeDir(abs, ignore, recurse)
+			times.IncludeDir(abs, ignore, care, recurse)
 		}
 		if f.Mode().IsRegular() {
 			times[cname(abs)] = f.ModTime()
