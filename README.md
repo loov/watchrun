@@ -28,10 +28,10 @@ $ watchrun -monitor ../../ go run main.go
 $ watchrun -monitor main.go go run main.go
 ```
 
-You can run multiple commands in succession with `;;` (instead of the usual `&&`). For example:
+You can run multiple commands in succession with `==` (instead of the usual `&&`). For example:
 
 ```
-$ watchrun go build -i . ;; myproject
+$ watchrun go build -i . == myproject
 ```
 
 ## Usage
