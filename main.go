@@ -144,7 +144,7 @@ func main() {
 	}
 	procs := ParseArgs(args)
 
-	monitoring := strings.Split(strings.Replace(*monitor, ":", ";", -1), ";")
+	monitoring := strings.Split(*monitor, ";")
 	ignoring := ignore.All()
 	caring := care.All()
 
