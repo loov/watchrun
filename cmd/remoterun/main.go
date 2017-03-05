@@ -11,6 +11,7 @@ import (
 	"net/rpc"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -95,6 +96,9 @@ func main() {
 
 func Run(name string, args []string) *Process {
 	proc := &Process{}
+	if abs, err := filepath.Abs(name); err == nil {
+		name = abs
+	}
 	proc.Name = name
 	proc.Args = args
 	go proc.Run()
