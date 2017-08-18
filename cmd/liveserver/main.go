@@ -21,8 +21,15 @@ import (
 var (
 	addr     = flag.String("listen", ":9000", "port to listen to")
 	dir      = flag.String("dir", ".", "directory to monitor")
-	interval = flag.Duration("i", 500*time.Millisecond, "poll interval")
+	interval = flag.Duration("i", 300*time.Millisecond, "poll interval")
 )
+
+func DisableCache(w http.ResponseWriter) {
+	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
+	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Accel-Expires", "0")
+}
 
 func main() {
 	flag.Parse()
@@ -35,11 +42,7 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
-		w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("X-Accel-Expires", "0")
-
+		DisableCache(w)
 		path := filepath.FromSlash(path.Join(*dir, r.URL.Path))
 		http.ServeFile(w, r, path)
 	})
@@ -56,8 +59,11 @@ func ServeReloader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	DisableCache(w)
+
 	url := "ws://" + r.Host + r.RequestURI
 	data := strings.Replace(ReloaderJS, "DEFAULT_HOST", url, -1)
+	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(data))
 }
 
