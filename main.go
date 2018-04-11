@@ -70,6 +70,7 @@ func (pipe *Pipeline) Run() {
 		pipe.proc = proc
 		pipe.active = exec.Command(proc.Cmd, proc.Args...)
 		pgroup.Setup(pipe.active)
+
 		pipe.active.Stdout, pipe.active.Stderr = pipe.writer, pipe.writer
 
 		fmt.Println("<<  run:", proc.String(), ">>")
