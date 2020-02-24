@@ -40,10 +40,11 @@ func main() {
 		path := filepath.FromSlash(path.Join(*dir, r.URL.Path))
 		http.ServeFile(w, r, path)
 	})
-	http.Handle("/~reload.js", &jsreload.Server{
+	http.Handle("/~reload.js", jsreload.NewServer(jsreload.Config{
 		Dir:      *dir,
 		Interval: *interval,
-	})
+		Ignore:   jsreload.DefaultIgnore,
+	}))
 
 	fmt.Println("Server starting on:", *addr)
 	fmt.Println("Watching folder:", *dir)

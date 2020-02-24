@@ -14,26 +14,53 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-type Server struct {
-	Dir string
-
+// Config is configures server for modifications.
+type Config struct {
+	// Interval defines how often to poll the disk.
 	Interval time.Duration
+	// TODO: change to Monitor []string
+	// Dir monitor this directory for changes.
+	Dir string
+	// Ignore these globs to avoid unnecessary updates.
+	Ignore []string
+	// Care only monitor files that match these globs.
+	Care []string
 }
 
-func DisableCache(w http.ResponseWriter) {
+// DefaultIgnore contains a list of files that you usually want to ignore.
+// Such as temporary files, hidden files, log files and binaries.
+var DefaultIgnore = watch.DefaultIgnore
+
+// Server responds to regular requests with jsreload.Script and handles incoming websockets.
+type Server struct {
+	config Config
+}
+
+// NewServer creates a new server using the specified config.
+func NewServer(config Config) *Server {
+	return &Server{
+		config: config,
+	}
+}
+
+// disableCache ensures that client always re-reqiuests the file.
+func disableCache(w http.ResponseWriter) {
 	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
 	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("X-Accel-Expires", "0")
 }
 
+// ServeHTTP reponds to:
+//   GET with jsreload.Script.
+//   WebSocket Upgrade with serving update messages.
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") != "" {
 		websocket.Handler(server.changes).ServeHTTP(w, r)
 		return
 	}
 
-	DisableCache(w)
+	disableCache(w)
 
 	url := "ws://" + r.Host + r.RequestURI
 	data := strings.Replace(Script, "{{.DEFAULT_HOST}}", url, -1)
@@ -41,21 +68,29 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(data))
 }
 
+// Message is json message that is sent on changes.
 type Message struct {
 	Type string  `json:"type"`
 	Data Changes `json:"data"`
 }
 
+// Changes is a list of Change.
 type Changes []Change
-type Change struct {
-	Kind     string    `json:"kind"`
-	Path     string    `json:"path"`
-	Package  string    `json:"package"`
-	Depends  []string  `json:"depends"`
-	Modified time.Time `json:"modified"`
-}
 
-var ActiveConnections int32
+// Change defines a list of changes.
+type Change struct {
+	// Kind is one of "create", "modify", "delete"
+	Kind string `json:"kind"`
+	// Path rewriting TODO:
+	Path string `json:"path"`
+	// Modified returns the modified time of the file.
+	Modified time.Time `json:"modified"`
+
+	// Package finds match based on `package("<pkgname>", function(){`
+	Package string `json:"package"`
+	// Depends finds text based on `depends("<pkgname>")`
+	Depends []string `json:"depends"`
+}
 
 func (server *Server) changes(conn *websocket.Conn) {
 	defer conn.Close()
@@ -63,7 +98,7 @@ func (server *Server) changes(conn *websocket.Conn) {
 	fmt.Println("CONNECTED", conn.LocalAddr())
 	defer fmt.Println("DISCONNECTED", conn.LocalAddr())
 
-	watcher := watch.New(server.Interval, nil, nil, nil, true)
+	watcher := watch.New(server.config.Interval, []string{server.config.Dir}, server.config.Ignore, server.config.Care, true)
 	defer watcher.Stop()
 
 	go func() {
@@ -77,7 +112,7 @@ func (server *Server) changes(conn *websocket.Conn) {
 			Type: "changes",
 		}
 		for _, change := range changeset {
-			rel, err := filepath.Rel(server.Dir, change.Path)
+			rel, err := filepath.Rel(server.config.Dir, change.Path)
 			if err != nil {
 				rel = change.Path
 			}
