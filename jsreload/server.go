@@ -2,16 +2,13 @@ package jsreload
 
 import (
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/loov/watchrun/watch"
-	"golang.org/x/net/websocket"
 )
 
 // Config is configures server for modifications.
@@ -53,7 +50,9 @@ var DefaultIgnore = watch.DefaultIgnore
 
 // Server responds to regular requests with jsreload.Script and handles incoming websockets.
 type Server struct {
-	config Config
+	config    Config
+	listeners *Hub
+	watch     *watch.Watch
 }
 
 // NewServer creates a new server using the specified config.
@@ -64,17 +63,61 @@ func NewServer(config Config) *Server {
 		}
 	}
 
-	return &Server{
-		config: config,
+	server := &Server{
+		config:    config,
+		listeners: NewHub(),
+		watch: watch.New(
+			config.Interval,
+			config.Monitor,
+			config.Ignore,
+			config.Care,
+			true,
+		),
+	}
+
+	go server.monitor()
+
+	return server
+}
+
+// monitor handles file changes and notifies connections.
+func (server *Server) monitor() {
+	for changeset := range server.watch.Changes {
+		message := Message{
+			Type: "changes",
+		}
+
+		for _, change := range changeset {
+			path, action := server.config.OnChange(change)
+
+			pkgname, depends := extractPackageInfo(change.Path)
+			if pkgname == "" {
+				pkgname = path
+			}
+
+			message.Data = append(message.Data, Change{
+				Kind:     change.Kind,
+				Path:     path,
+				Modified: change.Modified,
+				Action:   action,
+				Package:  pkgname,
+				Depends:  depends,
+			})
+		}
+
+		fmt.Println("dispatching", message)
+		server.listeners.Dispatch(message)
 	}
 }
 
-// disableCache ensures that client always re-reqiuests the file.
-func disableCache(w http.ResponseWriter) {
-	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
-	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("X-Accel-Expires", "0")
+// Stop stops changes monitoring.
+func (server *Server) Stop() {
+	server.watch.Stop()
+}
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  0,
+	WriteBufferSize: 0,
 }
 
 // ServeHTTP reponds to:
@@ -82,7 +125,12 @@ func disableCache(w http.ResponseWriter) {
 //   WebSocket Upgrade with serving update messages.
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") != "" {
-		websocket.Handler(server.changes).ServeHTTP(w, r)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		go server.changes(conn)
 		return
 	}
 
@@ -115,7 +163,15 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ReloadBrowser sends a reload message to all connected browsers.
 func (server *Server) ReloadBrowser() {
-	// TODO:
+	server.listeners.Dispatch(Message{
+		Type: "changes",
+		Data: []Change{
+			{
+				Path:   "*",
+				Action: ReloadBrowser,
+			},
+		},
+	})
 }
 
 // Message is json message that is sent on changes.
@@ -144,71 +200,10 @@ type Change struct {
 	Depends []string `json:"depends"`
 }
 
-func (server *Server) changes(conn *websocket.Conn) {
-	defer conn.Close()
-
-	fmt.Println("CONNECTED", conn.LocalAddr())
-	defer fmt.Println("DISCONNECTED", conn.LocalAddr())
-
-	watcher := watch.New(
-		server.config.Interval,
-		server.config.Monitor,
-		server.config.Ignore,
-		server.config.Care,
-		true,
-	)
-	defer watcher.Stop()
-
-	go func() {
-		io.Copy(ioutil.Discard, conn)
-		conn.Close()
-		watcher.Stop()
-	}()
-
-	for changeset := range watcher.Changes {
-		message := Message{
-			Type: "changes",
-		}
-		for _, change := range changeset {
-			path, action := server.config.OnChange(change)
-
-			pkgname, depends := extractPackageInfo(change.Path)
-			if pkgname == "" {
-				pkgname = path
-			}
-			message.Data = append(message.Data, Change{
-				Kind:     change.Kind,
-				Path:     path,
-				Modified: change.Modified,
-				Action:   action,
-				Package:  pkgname,
-				Depends:  depends,
-			})
-		}
-
-		if err := websocket.JSON.Send(conn, message); err != nil {
-			return
-		}
-	}
-}
-
-var (
-	rxPackage = regexp.MustCompile(`\bpackage\s*\(\s*"([^"]+)"\s*,\s*function`)
-	rxDepends = regexp.MustCompile(`\bdepends\s*\(\s*"([^"]+)"\s*\)`)
-)
-
-func extractPackageInfo(filename string) (pkgname string, depends []string) {
-	depends = []string{}
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return
-	}
-
-	if m := rxPackage.FindStringSubmatch(string(data)); len(m) > 0 {
-		pkgname = m[1]
-	}
-	for _, dependency := range rxDepends.FindAllStringSubmatch(string(data), -1) {
-		depends = append(depends, dependency[1])
-	}
-	return
+// disableCache ensures that client always re-reqiuests the file.
+func disableCache(w http.ResponseWriter) {
+	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
+	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Accel-Expires", "0")
 }
