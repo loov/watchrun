@@ -25,7 +25,10 @@ func main() {
 	http.HandleFunc("/", serveIndex)
 
 	log.Println("listening on", *listen)
-	http.ListenAndServe(*listen, nil)
+	err := http.ListenAndServe(*listen, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request) {
