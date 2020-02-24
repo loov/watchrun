@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	ignore = watch.Globs{false, watch.DefaultIgnore, nil}
-	care   = watch.Globs{false, nil, nil}
+	ignore = watch.Globs{NoDefault: false, Default: watch.DefaultIgnore, Additional: nil}
+	care   = watch.Globs{NoDefault: false, Default: nil, Additional: nil}
 
 	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
