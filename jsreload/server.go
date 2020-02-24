@@ -18,25 +18,33 @@ import (
 type Config struct {
 	// Interval defines how often to poll the disk.
 	Interval time.Duration
-	// TODO: change to Monitor []string
-	// Dir monitor this directory for changes.
-	Dir string
+	// Monitor these globs for changes.
+	Monitor []string
 	// Ignore these globs to avoid unnecessary updates.
 	Ignore []string
 	// Care only monitor files that match these globs.
 	Care []string
+
+	// URL where the jsreload server is serving on.
+	// Code defaults to using the request.URL otherwise.
+	URL string
+	// ManualScriptSetup allows to disable automatic setup of js reloading script.
+	ManualScriptSetup bool
+
+	// OnChange should return the URL path for a particular file and the reaction for javascript.
+	OnChange func(change watch.Change) (path string, reaction Action)
 }
 
-// Reaction defines how browser reacts to a specific file changing.
-type Reaction string
+// Action defines how browser reacts to a specific file changing.
+type Action string
 
 const (
 	// IgnoreChanges ignores the file change.
-	IgnoreChanges Reaction = "ignore"
+	IgnoreChanges Action = "ignore"
 	// ReloadBrowser reloads the whole page.
-	ReloadBrowser Reaction = "reload"
-	// LiveReload deletes old reference and reinjects the code.
-	LiveReload Reaction = "live-reload"
+	ReloadBrowser Action = "reload"
+	// LiveInject deletes old reference and reinjects the code.
+	LiveInject Action = "inject"
 )
 
 // DefaultIgnore contains a list of files that you usually want to ignore.
@@ -50,6 +58,12 @@ type Server struct {
 
 // NewServer creates a new server using the specified config.
 func NewServer(config Config) *Server {
+	if config.OnChange == nil {
+		config.OnChange = func(change watch.Change) (string, Action) {
+			return filepath.ToSlash(change.Path), ReloadBrowser
+		}
+	}
+
 	return &Server{
 		config: config,
 	}
@@ -74,8 +88,27 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	disableCache(w)
 
-	url := "ws://" + r.Host + r.RequestURI
-	data := strings.Replace(Script, "{{.DEFAULT_HOST}}", url, -1)
+	url := server.config.URL
+	if url == "" {
+		url = "ws://" + r.Host + r.RequestURI
+	}
+
+	if trimmed := strings.TrimPrefix(url, "http://"); trimmed != url {
+		url = "ws://" + trimmed
+	} else if trimmed := strings.TrimPrefix(url, "https://"); trimmed != url {
+		url = "wss://" + trimmed
+	}
+
+	data := Script
+
+	data = strings.Replace(data, "{{.SocketURL}}", url, -1)
+
+	autoSetup := "true"
+	if server.config.ManualScriptSetup {
+		autoSetup = "false"
+	}
+	data = strings.Replace(data, "{{.AutoSetup}}", autoSetup, -1)
+
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(data))
 }
@@ -102,6 +135,8 @@ type Change struct {
 	Path string `json:"path"`
 	// Modified returns the modified time of the file.
 	Modified time.Time `json:"modified"`
+	// Action is the action browser should take with this file.
+	Action Action `json:"action"`
 
 	// Package finds match based on `package("<pkgname>", function(){`
 	Package string `json:"package"`
@@ -115,7 +150,13 @@ func (server *Server) changes(conn *websocket.Conn) {
 	fmt.Println("CONNECTED", conn.LocalAddr())
 	defer fmt.Println("DISCONNECTED", conn.LocalAddr())
 
-	watcher := watch.New(server.config.Interval, []string{server.config.Dir}, server.config.Ignore, server.config.Care, true)
+	watcher := watch.New(
+		server.config.Interval,
+		server.config.Monitor,
+		server.config.Ignore,
+		server.config.Care,
+		true,
+	)
 	defer watcher.Stop()
 
 	go func() {
@@ -129,11 +170,8 @@ func (server *Server) changes(conn *websocket.Conn) {
 			Type: "changes",
 		}
 		for _, change := range changeset {
-			rel, err := filepath.Rel(server.config.Dir, change.Path)
-			if err != nil {
-				rel = change.Path
-			}
-			path := filepath.ToSlash(rel)
+			path, action := server.config.OnChange(change)
+
 			pkgname, depends := extractPackageInfo(change.Path)
 			if pkgname == "" {
 				pkgname = path
@@ -142,6 +180,7 @@ func (server *Server) changes(conn *websocket.Conn) {
 				Kind:     change.Kind,
 				Path:     path,
 				Modified: change.Modified,
+				Action:   action,
 				Package:  pkgname,
 				Depends:  depends,
 			})
