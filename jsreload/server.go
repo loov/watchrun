@@ -27,6 +27,18 @@ type Config struct {
 	Care []string
 }
 
+// Reaction defines how browser reacts to a specific file changing.
+type Reaction string
+
+const (
+	// IgnoreChanges ignores the file change.
+	IgnoreChanges Reaction = "ignore"
+	// ReloadBrowser reloads the whole page.
+	ReloadBrowser Reaction = "reload"
+	// LiveReload deletes old reference and reinjects the code.
+	LiveReload Reaction = "live-reload"
+)
+
 // DefaultIgnore contains a list of files that you usually want to ignore.
 // Such as temporary files, hidden files, log files and binaries.
 var DefaultIgnore = watch.DefaultIgnore
@@ -66,6 +78,11 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	data := strings.Replace(Script, "{{.DEFAULT_HOST}}", url, -1)
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(data))
+}
+
+// ReloadBrowser sends a reload message to all connected browsers.
+func (server *Server) ReloadBrowser() {
+	// TODO:
 }
 
 // Message is json message that is sent on changes.
