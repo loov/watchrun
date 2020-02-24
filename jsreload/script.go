@@ -9,31 +9,59 @@ const Script = `
 	exports.Client.socketURL = "{{.SocketURL}}";
 
 	function Client(host) {
-		this.socket = new WebSocket(host || Client.socketURL);
-		this.socket.onopen = function(ev) {
-			console.debug("reloader open: ", ev);
-		};
-		this.socket.onerror = function(ev) {
-			console.debug("reloader error: ", ev);
-		};
-		this.socket.onclose = function(ev) {
-			console.debug("reloader close: ", ev);
-		};
-		this.socket.onmessage = this.message.bind(this);
+		var client = this;
+
+		var socket = new WebSocket(host || Client.socketURL);
+		client.socket = socket;
+
+		socket.addEventListener("open", function(ev) {
+			socket.send({"type": "hello"});
+			console.debug("jsreload open: ", ev);
+		});
+
+		socket.addEventListener("error", function(ev) {
+			console.debug("jsreload error: ", ev);
+		});
+
+		socket.addEventListener("close", function(ev) {
+			console.debug("jsreload close: ", ev);
+			window.setInterval(function(){
+				reconnect(host);
+			}, {{.ReconnectInterval}});
+		});
+
+		socket.addEventListener("message", function(ev) {
+			client.message(ev);
+		})
+
 		this.changeset = 0;
+	}
+
+	function reconnect(host) {
+		try {
+			var socket = new WebSocket(host || Client.socketURL);
+			socket.addEventListener("open", function(){
+				location.reload();
+			});
+		} catch(error) {
+			console.debug("jsreload tried to reconnect and failed");
+		}
 	}
 
 	Client.prototype = {
 		message: function(ev) {
-			var reloader = this;
+			var client = this;
 
-			reloader.changeset++;
-			if (reloader.changeset <= 1) {
+			client.changeset++;
+			if (client.changeset <= 1) {
 				return;
 			}
 
 			var message = JSON.parse(ev.data);
-			reloader["on" + message.type].call(reloader, message.data);
+			client["on" + message.type].call(client, message.data);
+		},
+		onhello: function(mesage){
+			console.debug("jsreload server says hello");
 		},
 		onchanges: function(changes) {
 			var head = document.getElementsByTagName("head")[0];
@@ -87,7 +115,7 @@ const Script = `
 					if (asset) {
 						head.appendChild(asset);
 					} else {
-						location.reload();
+						//location.reload();
 					}
 				}
 			}
@@ -100,7 +128,6 @@ const Script = `
 			}
 
 			function modify(change) {
-				console.info("changed ", change.path)
 				remove(change);
 				inject(change);
 			}

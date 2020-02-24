@@ -15,6 +15,7 @@ func (server *Server) changes(conn *websocket.Conn) {
 	}()
 
 	listener := newWebsocketListener(server.listeners, conn)
+	listener.Dispatch(Message{Type: "hello"})
 	server.listeners.Register(listener)
 	go listener.writer()
 }

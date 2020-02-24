@@ -27,6 +27,8 @@ type Config struct {
 	URL string
 	// ManualScriptSetup allows to disable automatic setup of js reloading script.
 	ManualScriptSetup bool
+	// ReconnectInterval defines how fast jsreload tries to reconnect after losing connection to the server.
+	ReconnectInterval time.Duration
 
 	// OnChange should return the URL path for a particular file and the reaction for javascript.
 	OnChange func(change watch.Change) (path string, reaction Action)
@@ -61,6 +63,10 @@ func NewServer(config Config) *Server {
 		config.OnChange = func(change watch.Change) (string, Action) {
 			return filepath.ToSlash(change.Path), ReloadBrowser
 		}
+	}
+
+	if config.ReconnectInterval == 0 {
+		config.ReconnectInterval = time.Second
 	}
 
 	server := &Server{
@@ -105,7 +111,6 @@ func (server *Server) monitor() {
 			})
 		}
 
-		fmt.Println("dispatching", message)
 		server.listeners.Dispatch(message)
 	}
 }
@@ -156,6 +161,9 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		autoSetup = "false"
 	}
 	data = strings.Replace(data, "{{.AutoSetup}}", autoSetup, -1)
+
+	reconnectInterval := fmt.Sprintf("%d", server.config.ReconnectInterval.Milliseconds())
+	data = strings.Replace(data, "{{.ReconnectInterval}}", reconnectInterval, -1)
 
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(data))
