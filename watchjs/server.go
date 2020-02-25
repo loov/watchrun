@@ -1,4 +1,4 @@
-package jsreload
+package watchjs
 
 import (
 	"fmt"
@@ -22,12 +22,12 @@ type Config struct {
 	// Care only monitor files that match these globs.
 	Care []string
 
-	// URL where the jsreload server is serving on.
+	// URL where the watchjs server is serving on.
 	// Code defaults to using the request.URL otherwise.
 	URL string
 	// ManualScriptSetup allows to disable automatic setup of js reloading script.
 	ManualScriptSetup bool
-	// ReconnectInterval defines how fast jsreload tries to reconnect after losing connection to the server.
+	// ReconnectInterval defines how fast watchjs tries to reconnect after losing connection to the server.
 	ReconnectInterval time.Duration
 
 	// OnChange should return the URL path for a particular file and the reaction for javascript.
@@ -50,7 +50,7 @@ const (
 // Such as temporary files, hidden files, log files and binaries.
 var DefaultIgnore = watch.DefaultIgnore
 
-// Server responds to regular requests with jsreload.Script and handles incoming websockets.
+// Server responds to regular requests with watchjs.Script and handles incoming websockets.
 type Server struct {
 	config    Config
 	listeners *Hub
@@ -126,7 +126,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // ServeHTTP reponds to:
-//   GET with jsreload.Script.
+//   GET with watchjs.Script.
 //   WebSocket Upgrade with serving update messages.
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") != "" {

@@ -1,4 +1,4 @@
-package jsreload
+package watchjs
 
 // Script is reloading script for server.
 const Script = `
@@ -16,15 +16,15 @@ const Script = `
 
 		socket.addEventListener("open", function(ev) {
 			socket.send({"type": "hello"});
-			console.debug("jsreload open: ", ev);
+			console.debug("watchjs open: ", ev);
 		});
 
 		socket.addEventListener("error", function(ev) {
-			console.debug("jsreload error: ", ev);
+			console.debug("watchjs error: ", ev);
 		});
 
 		socket.addEventListener("close", function(ev) {
-			console.debug("jsreload close: ", ev);
+			console.debug("watchjs close: ", ev);
 			window.setInterval(function(){
 				reconnect(host);
 			}, {{.ReconnectInterval}});
@@ -44,7 +44,7 @@ const Script = `
 				location.reload();
 			});
 		} catch(error) {
-			console.debug("jsreload tried to reconnect and failed");
+			console.debug("watchjs tried to reconnect and failed");
 		}
 	}
 
@@ -61,7 +61,7 @@ const Script = `
 			client["on" + message.type].call(client, message.data);
 		},
 		onhello: function(mesage){
-			console.debug("jsreload server says hello");
+			console.debug("watchjs server says hello");
 		},
 		onchanges: function(changes) {
 			var head = document.getElementsByTagName("head")[0];
@@ -161,5 +161,5 @@ const Script = `
 	if({{.AutoSetup}}) {
 		exports.instance = new Client();
 	}
-})(window.jsreload = {});
+})(window.watchjs = {});
 `

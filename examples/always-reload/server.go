@@ -6,19 +6,19 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/loov/watchrun/jsreload"
+	"github.com/loov/watchrun/watchjs"
 )
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8080", "address to listen to")
 	flag.Parse()
 
-	http.Handle("/~reload.js", jsreload.NewServer(jsreload.Config{
+	http.Handle("/~watch.js", watchjs.NewServer(watchjs.Config{
 		Monitor: []string{
 			filepath.Join("static", "**"),
 			filepath.Join("site", "**"),
 		},
-		Ignore: jsreload.DefaultIgnore,
+		Ignore: watchjs.DefaultIgnore,
 	}))
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))

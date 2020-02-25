@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/loov/watchrun/jsreload"
+	"github.com/loov/watchrun/watchjs"
 )
 
 var (
@@ -40,10 +40,10 @@ func main() {
 		path := filepath.FromSlash(path.Join(*dir, r.URL.Path))
 		http.ServeFile(w, r, path)
 	})
-	http.Handle("/~reload.js", jsreload.NewServer(jsreload.Config{
-		Dir:      *dir,
+	http.Handle("/~reload.js", watchjs.NewServer(watchjs.Config{
+		Monitor:  []string{*dir},
 		Interval: *interval,
-		Ignore:   jsreload.DefaultIgnore,
+		Ignore:   watchjs.DefaultIgnore,
 	}))
 
 	fmt.Println("Server starting on:", *addr)

@@ -1,4 +1,4 @@
-package jsreload
+package watchjs
 
 import "sync"
 
