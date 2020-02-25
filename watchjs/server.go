@@ -71,13 +71,7 @@ type Server struct {
 // NewServer creates a new server using the specified config.
 func NewServer(config Config) *Server {
 	if config.OnChange == nil {
-		config.OnChange = func(change watch.Change) (string, Action) {
-			url, ok := FileToURL(change.Path, "", "")
-			if !ok {
-				url = path.Join("/", filepath.ToSlash(change.Path))
-			}
-			return url, ReloadBrowser
-		}
+		config.OnChange = DefaultOnChange
 	}
 
 	if config.ReconnectInterval == 0 {
@@ -99,6 +93,19 @@ func NewServer(config Config) *Server {
 	go server.monitor()
 
 	return server
+}
+
+// DefaultOnChange assumes that your folder structure matches your URL structure.
+// It live injects css and reloads browser otherwise.
+func DefaultOnChange(change watch.Change) (string, Action) {
+	url, ok := FileToURL(change.Path, "", "")
+	if !ok {
+		url = path.Join("/", filepath.ToSlash(change.Path))
+	}
+	if filepath.Ext(change.Path) == ".css" {
+		return url, LiveInject
+	}
+	return url, ReloadBrowser
 }
 
 // monitor handles file changes and notifies connections.

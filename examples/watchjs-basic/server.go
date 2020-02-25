@@ -13,6 +13,8 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:8080", "address to listen to")
 	flag.Parse()
 
+	// This example assumes that your folder structure and URL structure match.
+	// See "watchjs-live" example how to adjust for a different structure.
 	http.Handle("/~watch.js", watchjs.NewServer(watchjs.Config{
 		Monitor: []string{
 			filepath.Join("static", "**"),
