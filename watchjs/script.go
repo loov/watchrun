@@ -115,7 +115,8 @@ const Script = `
 					if (asset) {
 						head.appendChild(asset);
 					} else {
-						//location.reload();
+						console.debug("don't know how to handle " + change.path + " reloading page");
+						location.reload();
 					}
 				}
 			}
@@ -143,6 +144,7 @@ const Script = `
 				case "inject":
 				}
 
+				console.debug("live updating " + change.path);
 				switch (change.kind) {
 					case "create":
 						inject(change);

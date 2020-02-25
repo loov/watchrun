@@ -3,6 +3,7 @@ package watchjs
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -46,6 +47,16 @@ const (
 	LiveInject Action = "inject"
 )
 
+// FileToURL converts filename in basedir to a url in urlprefix.
+func FileToURL(filename, basedir, urlprefix string) (url string, ok bool) {
+	rel, err := filepath.Rel(basedir, filename)
+	if err != nil {
+		return "", false
+	}
+
+	return path.Join("/", urlprefix, filepath.ToSlash(rel)), true
+}
+
 // DefaultIgnore contains a list of files that you usually want to ignore.
 // Such as temporary files, hidden files, log files and binaries.
 var DefaultIgnore = watch.DefaultIgnore
@@ -61,7 +72,11 @@ type Server struct {
 func NewServer(config Config) *Server {
 	if config.OnChange == nil {
 		config.OnChange = func(change watch.Change) (string, Action) {
-			return filepath.ToSlash(change.Path), ReloadBrowser
+			url, ok := FileToURL(change.Path, "", "")
+			if !ok {
+				url = path.Join("/", filepath.ToSlash(change.Path))
+			}
+			return url, ReloadBrowser
 		}
 	}
 
