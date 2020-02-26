@@ -79,12 +79,12 @@ const Script = `
 					case ".js":
 						var asset = document.createElement("script");
 						asset.id = name;
-						asset.src = name;
+						asset.src = name + "?" + Date.now();
 						return asset;
 					case ".css":
 						var asset = document.createElement("link");
 						asset.id = name;
-						asset.href = name;
+						asset.href = name + "?" + Date.now();
 						asset.rel = "stylesheet";
 						return asset;
 				}
