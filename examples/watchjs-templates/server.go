@@ -28,10 +28,14 @@ func main() {
 			OnChange: func(change watch.Change) (string, watchjs.Action) {
 				// When change is in staticDir, we instruct the browser live (re)inject the file.
 				if url, ok := watchjs.FileToURL(change.Path, staticDir, "/static"); ok {
+					// When an html file is changed
 					if filepath.Ext(change.Path) == ".html" {
+						// Trigger recompiling the templates.
 						assets.Recompile()
+						// And we'll ignore any changes on the browser side for the moment.
 						return url, watchjs.IgnoreChanges
 					}
+
 					if filepath.Ext(change.Path) == ".css" {
 						return url, watchjs.LiveInject
 					}
@@ -99,11 +103,13 @@ type Assets struct {
 	err     error
 }
 
+// Recompile parses the templates.
 func (assets *Assets) Recompile() {
 	assets.mu.Lock()
 	defer assets.mu.Unlock()
 
 	assets.recompile()
+	// After recompiling refresh all the connected browsers.
 	assets.watchjs.ReloadBrowser()
 }
 
