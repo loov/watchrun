@@ -1,3 +1,3 @@
 #!/bin/sh
 
-watchrun -monitor *.go go build . == ./watchjs-basic
+watchrun -care *.go go build . == ./watchjs-basic
