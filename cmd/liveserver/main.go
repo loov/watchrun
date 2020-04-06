@@ -12,12 +12,6 @@ import (
 	"github.com/loov/watchrun/watchjs"
 )
 
-var (
-	addr     = flag.String("listen", ":9000", "port to listen to")
-	dir      = flag.String("dir", ".", "directory to monitor")
-	interval = flag.Duration("i", 300*time.Millisecond, "poll interval")
-)
-
 func DisableCache(w http.ResponseWriter) {
 	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
 	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
@@ -26,27 +20,41 @@ func DisableCache(w http.ResponseWriter) {
 }
 
 func main() {
+	listen := flag.String("listen", "127.0.0.1:8080", "address to listen")
+	monitor := flag.String("monitor", ".", "directory to monitor changes")
+	serve := flag.String("serve", ".", "directory to serve content")
+
 	flag.Parse()
 
-	if !filepath.IsAbs(*dir) {
-		absdir, err := filepath.Abs(*dir)
+	if !filepath.IsAbs(*monitor) {
+		abs, err := filepath.Abs(*monitor)
 		if err == nil {
-			*dir = absdir
+			*monitor = abs
+		}
+	}
+
+	if !filepath.IsAbs(*serve) {
+		abs, err := filepath.Abs(*serve)
+		if err == nil {
+			*serve = abs
 		}
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		DisableCache(w)
-		path := filepath.FromSlash(path.Join(*dir, r.URL.Path))
+		path := filepath.FromSlash(path.Join(*serve, r.URL.Path))
 		http.ServeFile(w, r, path)
 	})
-	http.Handle("/~reload.js", watchjs.NewServer(watchjs.Config{
-		Monitor:  []string{*dir},
-		Interval: *interval,
-		Ignore:   watchjs.DefaultIgnore,
+
+	http.Handle("/~watch.js", watchjs.NewServer(watchjs.Config{
+		Monitor: []string{filepath.Join(*monitor, "**")},
+		Ignore:  watchjs.DefaultIgnore,
 	}))
 
-	fmt.Println("Server starting on:", *addr)
-	fmt.Println("Watching folder:", *dir)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	fmt.Println("Listening on:", *listen)
+	fmt.Println("Monitoring:", *monitor)
+	err := http.ListenAndServe(*listen, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
