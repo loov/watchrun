@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/loov/watchrun/watch"
 	"github.com/loov/watchrun/watchjs"
 )
 
@@ -49,6 +50,16 @@ func main() {
 	http.Handle("/~watch.js", watchjs.NewServer(watchjs.Config{
 		Monitor: []string{filepath.Join(*monitor, "**")},
 		Ignore:  watchjs.DefaultIgnore,
+		OnChange: func(change watch.Change) (string, watchjs.Action) {
+			// When change is in staticDir, we instruct the browser live (re)inject the file.
+			if url, ok := watchjs.FileToURL(change.Path, *monitor, "/"); ok {
+				if filepath.Ext(change.Path) == ".css" {
+					return url, watchjs.LiveInject
+				}
+				return url, watchjs.ReloadBrowser
+			}
+			return "/" + filepath.ToSlash(change.Path), watchjs.ReloadBrowser
+		},
 	}))
 
 	fmt.Println("Listening on:", *listen)
