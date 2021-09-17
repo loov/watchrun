@@ -62,7 +62,8 @@ func main() {
 		},
 	}))
 
-	fmt.Println("Listening on:", *listen)
+	url := "http://" + *listen
+	fmt.Println("Listening on:", url)
 	fmt.Println("Monitoring:", *monitor)
 	err := http.ListenAndServe(*listen, nil)
 	if err != nil {
