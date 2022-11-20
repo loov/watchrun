@@ -33,7 +33,11 @@ func main() {
 		},
 	}))
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	static := http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir)))
+	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		watchjs.DisableCache(w)
+		static.ServeHTTP(w, r)
+	})
 	http.HandleFunc("/", serveIndex)
 
 	log.Println("listening on", *listen)

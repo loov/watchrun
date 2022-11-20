@@ -48,7 +48,11 @@ func main() {
 
 	http.Handle("/~watch.js", assets.watchjs)
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	static := http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir)))
+	http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		watchjs.DisableCache(w)
+		static.ServeHTTP(w, r)
+	})
 
 	server := &Server{
 		Assets: assets,

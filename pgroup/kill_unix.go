@@ -1,3 +1,4 @@
+//go:build linux || darwin || netbsd || freebsd || openbsd
 // +build linux darwin netbsd freebsd openbsd
 
 package pgroup

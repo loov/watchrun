@@ -1,6 +1,7 @@
 package watchjs
 
 import (
+	_ "embed"
 	"fmt"
 	"net/http"
 	"path"
@@ -11,6 +12,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/loov/watchrun/watch"
 )
+
+// Script is reloading script for server.
+//
+//go:embed script.js
+var Script string
 
 // Config is configures server for modifications.
 type Config struct {
@@ -148,8 +154,9 @@ var upgrader = websocket.Upgrader{
 }
 
 // ServeHTTP reponds to:
-//   GET with watchjs.Script.
-//   WebSocket Upgrade with serving update messages.
+//
+//	GET with watchjs.Script.
+//	WebSocket Upgrade with serving update messages.
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") != "" {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -161,7 +168,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	disableCache(w)
+	DisableCache(w)
 
 	url := server.config.URL
 	if url == "" {
@@ -175,7 +182,6 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := Script
-
 	data = strings.Replace(data, "{{.SocketURL}}", url, -1)
 
 	autoSetup := "true"
@@ -228,12 +234,4 @@ type Change struct {
 	Package string `json:"package"`
 	// Depends finds text based on `depends("<pkgname>")`
 	Depends []string `json:"depends"`
-}
-
-// disableCache ensures that client always re-reqiuests the file.
-func disableCache(w http.ResponseWriter) {
-	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
-	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("X-Accel-Expires", "0")
 }

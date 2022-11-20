@@ -7,18 +7,10 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"time"
 
 	"github.com/loov/watchrun/watch"
 	"github.com/loov/watchrun/watchjs"
 )
-
-func DisableCache(w http.ResponseWriter) {
-	w.Header().Set("Expires", time.Unix(0, 0).Format(time.RFC1123))
-	w.Header().Set("Cache-Control", "no-cache, private, max-age=0")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("X-Accel-Expires", "0")
-}
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8080", "address to listen")
@@ -42,7 +34,7 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		DisableCache(w)
+		watchjs.DisableCache(w)
 		path := filepath.FromSlash(path.Join(*serve, r.URL.Path))
 		http.ServeFile(w, r, path)
 	})
