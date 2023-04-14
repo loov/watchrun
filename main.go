@@ -26,6 +26,7 @@ var (
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
 	recurse  = flag.Bool("recurse", true, "when watching a folder should recurse")
 	verbose  = flag.Bool("verbose", false, "verbose output (same as -log=debug)")
+	clear    = flag.Bool("clear", false, "clear the screen after rerunning the commands")
 )
 
 func init() {
@@ -203,6 +204,9 @@ func main() {
 	for range watcher.Changes {
 		if pipe != nil {
 			pipe.Kill()
+		}
+		if *clear {
+			ClearScreen()
 		}
 		logln(LogLevelInfo, "<<", time.Now(), ">>")
 		pipe = Run(procs)
