@@ -12,23 +12,38 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/loov/hrtime"
 	"github.com/loov/watchrun/pgroup"
 	"github.com/loov/watchrun/watch"
 )
 
 var (
-	ignore = watch.Globs{NoDefault: false, Default: watch.DefaultIgnore, Additional: nil}
-	care   = watch.Globs{NoDefault: false, Default: nil, Additional: nil}
+	ignore   = watch.Globs{NoDefault: false, Default: watch.DefaultIgnore, Additional: nil}
+	care     = watch.Globs{NoDefault: false, Default: nil, Additional: nil}
+	loglevel = LogLevelInfo
 
 	interval = flag.Duration("interval", 300*time.Millisecond, "interval to wait between monitoring")
 	monitor  = flag.String("monitor", ".", "files/folders/globs to monitor")
 	recurse  = flag.Bool("recurse", true, "when watching a folder should recurse")
-	verbose  = flag.Bool("verbose", false, "verbose output")
+	verbose  = flag.Bool("verbose", false, "verbose output (same as -log=debug)")
 )
 
 func init() {
 	flag.Var(&ignore, "ignore", "ignore files/folders that match these globs")
 	flag.Var(&care, "care", "check only changes to files that match these globs")
+	flag.Var(&loglevel, "log", "logging level (debug, info, warn, error, silent)")
+}
+
+func logln(at LogLevel, values ...any) {
+	if loglevel.Matches(at) {
+		fmt.Println(values...)
+	}
+}
+
+func logf(at LogLevel, format string, values ...any) {
+	if loglevel.Matches(at) {
+		fmt.Printf(format, values...)
+	}
 }
 
 type Process struct {
@@ -73,16 +88,16 @@ func (pipe *Pipeline) Run() {
 
 		pipe.active.Stdout, pipe.active.Stderr = pipe.writer, pipe.writer
 
-		fmt.Println("<<  run:", proc.String(), ">>")
+		logln(LogLevelInfo, "<<  run:", proc.String(), ">>")
 
-		start := time.Now()
+		start := hrtime.Now()
 		err := pipe.active.Start()
 		if err != nil {
 			pipe.active = nil
 			pipe.killed = true
 			pipe.closeio()
 			pipe.mu.Unlock()
-			fmt.Println("<< fail:", err, ">>")
+			logln(LogLevelError, "<< fail:", err, ">>")
 			return
 		}
 		cmd := pipe.active
@@ -91,7 +106,7 @@ func (pipe *Pipeline) Run() {
 		if err := cmd.Wait(); err != nil {
 			return
 		}
-		fmt.Println("<< done:", proc.String(), time.Since(start), ">>")
+		logln(LogLevelInfo, "<< done:", proc.String(), hrtime.Since(start), ">>")
 	}
 }
 
@@ -100,7 +115,7 @@ func (pipe *Pipeline) Kill() {
 	defer pipe.mu.Unlock()
 
 	if pipe.active != nil {
-		fmt.Println("<< kill:", pipe.proc.String(), ">>")
+		logln(LogLevelInfo, "<< kill:", pipe.proc.String(), ">>")
 		pipe.closeio()
 		pgroup.Kill(pipe.active)
 		pipe.active = nil
@@ -138,6 +153,10 @@ func ParseArgs(args []string) (procs []Process) {
 func main() {
 	flag.Parse()
 
+	if *verbose {
+		loglevel = LogLevelDebug
+	}
+
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.PrintDefaults()
@@ -149,7 +168,7 @@ func main() {
 	ignoring := ignore.All()
 	caring := care.All()
 
-	if *verbose {
+	if loglevel.Matches(LogLevelDebug) {
 		fmt.Println("Options:")
 		fmt.Println("    interval   : ", *interval)
 		fmt.Println("    recursive  : ", *recurse)
@@ -185,7 +204,7 @@ func main() {
 		if pipe != nil {
 			pipe.Kill()
 		}
-		fmt.Println("<<", time.Now(), ">>")
+		logln(LogLevelInfo, "<<", time.Now(), ">>")
 		pipe = Run(procs)
 	}
 
