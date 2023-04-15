@@ -11,8 +11,10 @@ go get github.com/loov/watchrun
 Example usage:
 
 ```
-$ watchrun go run main.go
+$ watchrun "go build -o example.exe . == ./example.exe"
 ```
+
+_Note: directly using `watchrun go run main.go`, doesn't kill the compiled program automatically, which may cause problems, if you have a server listening._
 
 Then you can test with:
 
@@ -24,8 +26,8 @@ $ echo package main; main(){ println("world") } > main.go
 You can explicitly specify which folder or file to watch with `-monitor`:
 
 ```
-$ watchrun -monitor ../../ go run main.go
-$ watchrun -monitor main.go go run main.go
+$ watchrun -monitor ../../  "go build -o example.exe . == ./example.exe"
+$ watchrun -monitor main.go "go build -o example.exe . == ./example.exe"
 ```
 
 You can run multiple commands in succession with `==` (instead of the usual `&&`). For example:
