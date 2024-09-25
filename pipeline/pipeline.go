@@ -29,6 +29,8 @@ func (proc *Process) String() string {
 }
 
 type Pipeline struct {
+	Dir       string
+	Output    io.Writer
 	Log       Log
 	Processes []Process
 
@@ -47,7 +49,13 @@ func (pipe *Pipeline) closeio() {
 
 func (pipe *Pipeline) Run() {
 	pipe.reader, pipe.writer = io.Pipe()
-	go io.Copy(os.Stdout, pipe.reader)
+
+	output := pipe.Output
+	if output == nil {
+		output = os.Stdout
+	}
+
+	go io.Copy(output, pipe.reader)
 
 	for _, proc := range pipe.Processes {
 		pipe.mu.Lock()
@@ -58,6 +66,7 @@ func (pipe *Pipeline) Run() {
 
 		pipe.proc = proc
 		pipe.active = exec.Command(proc.Cmd, proc.Args...)
+		pipe.active.Dir = pipe.Dir
 		pgroup.Setup(pipe.active)
 
 		pipe.active.Stdout, pipe.active.Stderr = pipe.writer, pipe.writer
