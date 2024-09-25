@@ -45,3 +45,30 @@ func (level LogLevel) String() string {
 	}
 	return name
 }
+
+func logln(at LogLevel, values ...any) {
+	if loglevel.Matches(at) {
+		fmt.Println(values...)
+	}
+}
+
+func logf(at LogLevel, format string, values ...any) {
+	if loglevel.Matches(at) {
+		fmt.Printf(format, values...)
+	}
+}
+
+type pipelineLog struct{}
+
+func (pipelineLog) Info(args ...any) {
+	logln(LogLevelInfo, args...)
+}
+func (pipelineLog) Infof(format string, args ...any) {
+	logf(LogLevelInfo, format, args...)
+}
+func (pipelineLog) Error(args ...any) {
+	logln(LogLevelError, args...)
+}
+func (pipelineLog) Errorf(format string, args ...any) {
+	logf(LogLevelError, format, args...)
+}
