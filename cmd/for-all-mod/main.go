@@ -40,6 +40,7 @@ func main() {
 
 	var group errgroup.Group
 	group.SetLimit(*parallel)
+	defer group.Wait()
 
 	for _, modfile := range modfiles {
 		group.Go(func() error {
