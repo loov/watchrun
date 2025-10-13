@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/loov/watchrun/pipeline"
 	"golang.org/x/sync/errgroup"
@@ -15,6 +16,7 @@ import (
 
 func main() {
 	parallel := flag.Int("parallel", 4, "number of pipelines to run concurrently")
+	printwd := flag.Bool("print-workdir", false, "print working directory")
 
 	flag.Parse()
 
@@ -42,6 +44,8 @@ func main() {
 	group.SetLimit(*parallel)
 	defer group.Wait()
 
+	var printlock sync.Mutex
+
 	for _, modfile := range modfiles {
 		group.Go(func() error {
 			var output bytes.Buffer
@@ -55,7 +59,12 @@ func main() {
 
 			pipe.Run()
 
+			printlock.Lock()
+			if *printwd {
+				fmt.Println("# ", filepath.Dir(modfile))
+			}
 			fmt.Print(output.String())
+			printlock.Unlock()
 
 			return nil
 		})
