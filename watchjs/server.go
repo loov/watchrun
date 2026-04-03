@@ -175,9 +175,9 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		url = "ws://" + r.Host + r.RequestURI
 	}
 
-	if trimmed := strings.TrimPrefix(url, "http://"); trimmed != url {
+	if trimmed, ok := strings.CutPrefix(url, "http://"); ok {
 		url = "ws://" + trimmed
-	} else if trimmed := strings.TrimPrefix(url, "https://"); trimmed != url {
+	} else if trimmed, ok := strings.CutPrefix(url, "https://"); ok {
 		url = "wss://" + trimmed
 	}
 

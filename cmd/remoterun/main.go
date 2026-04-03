@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/rpc"
@@ -42,7 +42,7 @@ func sendfiles() {
 	defer client.Close()
 
 	for _, file := range flag.Args() {
-		data, err := ioutil.ReadFile(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -63,7 +63,7 @@ type Server struct {
 func (server *Server) Start(file *File, reply *int) (err error) {
 	fmt.Println("<< received:", file.Name, ">>")
 
-	err = ioutil.WriteFile(file.Name, file.Data, 0777)
+	err = os.WriteFile(file.Name, file.Data, 0777)
 	if err != nil {
 		return err
 	}

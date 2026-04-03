@@ -1,7 +1,8 @@
 package watchjs
 
 import (
-	"io/ioutil"
+	"os"
+
 	"regexp"
 )
 
@@ -12,7 +13,7 @@ var (
 
 func extractPackageInfo(filename string) (pkgname string, depends []string) {
 	depends = []string{}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return
 	}
