@@ -80,6 +80,10 @@ func NewServer(config Config) *Server {
 		config.OnChange = DefaultOnChange
 	}
 
+	if config.Interval <= 0 {
+		config.Interval = 300 * time.Millisecond
+	}
+
 	if config.ReconnectInterval == 0 {
 		config.ReconnectInterval = time.Second
 	}
