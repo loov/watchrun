@@ -116,10 +116,12 @@ func ParseArgs(args []string) (procs []Process) {
 	start := 0
 	for i, arg := range args {
 		if arg == ";;" || arg == "==" {
-			procs = append(procs, Process{
-				Cmd:  args[start],
-				Args: args[start+1 : i],
-			})
+			if i > start {
+				procs = append(procs, Process{
+					Cmd:  args[start],
+					Args: args[start+1 : i],
+				})
+			}
 			start = i + 1
 		}
 	}
