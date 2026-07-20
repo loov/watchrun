@@ -176,7 +176,11 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	url := server.config.URL
 	if url == "" {
-		url = "ws://" + r.Host + r.RequestURI
+		proto := "ws://"
+		if r.TLS != nil {
+			proto = "wss://"
+		}
+		url = proto + r.Host + r.RequestURI
 	}
 
 	if trimmed, ok := strings.CutPrefix(url, "http://"); ok {
