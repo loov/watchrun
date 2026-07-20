@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -123,11 +124,73 @@ func Run(log Log, procs []Process) *Pipeline {
 	return pipe
 }
 
+// tokenize splits a command line like a POSIX shell: on whitespace,
+// honoring single quotes, double quotes and backslash escapes.
+// It does not expand variables or globs.
+func tokenize(s string) ([]string, error) {
+	var tokens []string
+	var cur strings.Builder
+	pending := false // cur holds a token, even if empty (e.g. '')
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case ' ', '\t', '\n', '\r':
+			if pending {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+				pending = false
+			}
+		case '\'':
+			end := strings.IndexByte(s[i+1:], '\'')
+			if end < 0 {
+				return nil, errors.New("unclosed single quote")
+			}
+			cur.WriteString(s[i+1 : i+1+end])
+			i += end + 1
+			pending = true
+		case '"':
+			i++
+			closed := false
+			for ; i < len(s); i++ {
+				if s[i] == '"' {
+					closed = true
+					break
+				}
+				if s[i] == '\\' && i+1 < len(s) && strings.IndexByte(`"\$`+"`", s[i+1]) >= 0 {
+					i++
+				}
+				cur.WriteByte(s[i])
+			}
+			if !closed {
+				return nil, errors.New("unclosed double quote")
+			}
+			pending = true
+		case '\\':
+			if i+1 < len(s) {
+				i++
+				cur.WriteByte(s[i])
+			}
+			pending = true
+		default:
+			cur.WriteByte(c)
+			pending = true
+		}
+	}
+	if pending {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens, nil
+}
+
 func ParseArgs(args []string) (procs []Process) {
 	// support passing the whole pipeline as a single quoted argument,
 	// since unquoted ";;" and "==" are mangled by shells
 	if len(args) == 1 {
-		fields := strings.Fields(args[0])
+		fields, err := tokenize(args[0])
+		if err != nil {
+			fields = strings.Fields(args[0])
+		}
+		// ponytail: a quoted "==" still acts as a separator;
+		// track quoting in tokenize if that ever matters
 		if slices.Contains(fields, ";;") || slices.Contains(fields, "==") {
 			args = fields
 		}
