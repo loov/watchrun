@@ -41,6 +41,12 @@ func TestParseArgs(t *testing.T) {
 		{[]string{";;", "b"}, []Process{{"b", []string{}}}},
 		{[]string{"a", ";;", ";;", "b"}, []Process{{"a", []string{}}, {"b", []string{}}}},
 		{[]string{"a", ";;"}, []Process{{"a", []string{}}}},
+		// whole pipeline as a single quoted argument
+		{[]string{"go build -o example.exe . == ./example.exe"},
+			[]Process{{"go", []string{"build", "-o", "example.exe", "."}}, {"./example.exe", []string{}}}},
+		{[]string{"a x ;; b"}, []Process{{"a", []string{"x"}}, {"b", []string{}}}},
+		// single argument without separators stays a single command
+		{[]string{"/path with spaces/cmd"}, []Process{{"/path with spaces/cmd", []string{}}}},
 	}
 	for _, test := range tests {
 		got := ParseArgs(test.args)

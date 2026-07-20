@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 
@@ -123,6 +124,15 @@ func Run(log Log, procs []Process) *Pipeline {
 }
 
 func ParseArgs(args []string) (procs []Process) {
+	// support passing the whole pipeline as a single quoted argument,
+	// since unquoted ";;" and "==" are mangled by shells
+	if len(args) == 1 {
+		fields := strings.Fields(args[0])
+		if slices.Contains(fields, ";;") || slices.Contains(fields, "==") {
+			args = fields
+		}
+	}
+
 	start := 0
 	for i, arg := range args {
 		if arg == ";;" || arg == "==" {
