@@ -2,19 +2,20 @@ package watchjs
 
 import (
 	"io"
-	"io/ioutil"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 func (server *Server) changes(conn *websocket.Conn) {
+	listener := newWebsocketListener(server.listeners, conn)
 	go func() {
-		_, _ = io.Copy(ioutil.Discard, conn.UnderlyingConn())
-		_ = conn.Close()
+		_, _ = io.Copy(io.Discard, conn.UnderlyingConn())
+		listener.mu.Lock()
+		defer listener.mu.Unlock()
+		listener.internalClose()
 	}()
 
-	listener := newWebsocketListener(server.listeners, conn)
 	listener.Dispatch(Message{Type: "hello"})
 	server.listeners.Register(listener)
 	go listener.writer()
@@ -71,6 +72,11 @@ func (listen *websocketListener) internalClose() {
 	}
 
 	listen.closed = true
+	// closing in stops the writer goroutine; Dispatch never sends
+	// after closed is set, so this cannot panic
+	close(listen.in)
 	listen.conn.Close()
-	listen.hub.Unregister(listen)
+	// async, because Hub.Dispatch calls into Dispatch while holding
+	// hub.mu, and Unregister here would deadlock on the same lock
+	go listen.hub.Unregister(listen)
 }
