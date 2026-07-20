@@ -35,7 +35,7 @@ func (level *LogLevel) Set(name string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("unknown log level %q, defaulting to debug\n", name)
+	return fmt.Errorf("unknown log level %q", name)
 }
 
 func (level LogLevel) String() string {
