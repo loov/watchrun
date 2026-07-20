@@ -60,9 +60,12 @@ type Server struct {
 }
 
 func (server *Server) Start(file *File, reply *int) (err error) {
-	fmt.Println("<< received:", file.Name, ">>")
+	// ponytail: only the base name, so a remote client cannot write
+	// outside the working directory
+	name := filepath.Base(file.Name)
+	fmt.Println("<< received:", name, ">>")
 
-	err = os.WriteFile(file.Name, file.Data, 0777)
+	err = os.WriteFile(name, file.Data, 0777)
 	if err != nil {
 		return err
 	}
@@ -71,7 +74,7 @@ func (server *Server) Start(file *File, reply *int) (err error) {
 	if server.active != nil {
 		go server.active.Kill()
 	}
-	server.active = Run(file.Name, []string{})
+	server.active = Run(name, []string{})
 	server.mu.Unlock()
 
 	return nil
