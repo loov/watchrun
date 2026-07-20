@@ -1,9 +1,35 @@
 package pipeline
 
 import (
+	"bytes"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 )
+
+type nopLog struct{}
+
+func (nopLog) Info(args ...any)                  {}
+func (nopLog) Infof(format string, args ...any)  {}
+func (nopLog) Error(args ...any)                 {}
+func (nopLog) Errorf(format string, args ...any) {}
+
+func TestRunFlushesOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no echo binary on windows")
+	}
+	var buf bytes.Buffer
+	pipe := &Pipeline{
+		Output:    &buf,
+		Log:       nopLog{},
+		Processes: []Process{{Cmd: "echo", Args: []string{"hello"}}},
+	}
+	pipe.Run()
+	if !strings.Contains(buf.String(), "hello") {
+		t.Errorf("output not flushed by the time Run returns: %q", buf.String())
+	}
+}
 
 func TestParseArgs(t *testing.T) {
 	tests := []struct {

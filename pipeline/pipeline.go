@@ -55,7 +55,17 @@ func (pipe *Pipeline) Run() {
 		output = os.Stdout
 	}
 
-	go io.Copy(output, pipe.reader)
+	copied := make(chan struct{})
+	go func() {
+		defer close(copied)
+		_, _ = io.Copy(output, pipe.reader)
+	}()
+	// close the writer when done, so io.Copy finishes and
+	// all output has reached pipe.Output when Run returns
+	defer func() {
+		pipe.writer.Close()
+		<-copied
+	}()
 
 	for _, proc := range pipe.Processes {
 		pipe.mu.Lock()
